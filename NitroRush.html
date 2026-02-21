@@ -243,14 +243,16 @@
       <p><span>W</span> Accelerate</p>
       <p><span>S</span> Brake / Reverse</p>
       <p><span>A</span> / <span>D</span> Steer</p>
-      <p><span>SHIFT</span> Nitro Boost</p>
+      <p><span>SHIFT</span> / <span>SPACE</span> Nitro Boost</p>
+      <p><span>[</span> Toggle Steering Dir</p>
     </div>
     <div class="ctrl-card" id="ctrl-p2">
       <h3>PLAYER 2</h3>
       <p><span>↑</span> Accelerate</p>
       <p><span>↓</span> Brake / Reverse</p>
       <p><span>←</span> / <span>→</span> Steer</p>
-      <p><span>ENTER</span> Nitro Boost</p>
+      <p><span>ENTER</span> / <span>R-SHIFT</span> Nitro Boost</p>
+      <p><span>]</span> Toggle Steering Dir</p>
     </div>
   </div>
   <button id="start-btn" onclick="startGame()">START RACE</button>
@@ -1020,15 +1022,15 @@ class Car {
 
   // ── Player input ──────────────────────────────────────────
   getInput(keys, pidx) {
-    if (pidx === 0) return {
-      up:    !!keys['KeyW'],      down:  !!keys['KeyS'],
-      steer: (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0),
-      nitro: !!(keys['ShiftLeft'] || keys['Space'])
-    };
+    const map = CONTROL_MAP[pidx] || CONTROL_MAP[0];
+    const left = anyKeyDown(keys, map.left) ? 1 : 0;
+    const right = anyKeyDown(keys, map.right) ? 1 : 0;
+
     return {
-      up:    !!keys['ArrowUp'],   down:  !!keys['ArrowDown'],
-      steer: (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0),
-      nitro: !!(keys['ShiftRight'] || keys['Enter'])
+      up: anyKeyDown(keys, map.up),
+      down: anyKeyDown(keys, map.down),
+      steer: (right - left) * map.steerSign,
+      nitro: anyKeyDown(keys, map.nitro)
     };
   }
 
@@ -1411,14 +1413,84 @@ function updateCamera(cam, car, dt) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// INPUT (unchanged)
+// INPUT
 // ─────────────────────────────────────────────────────────────
+
+const CONTROL_SETTINGS_KEY = 'nitrorush.controls.v1';
+const DEFAULT_STEER_SIGN = -1;
+
+const CONTROL_MAP = {
+  0: {
+    up: ['KeyW'],
+    down: ['KeyS'],
+    left: ['KeyA'],
+    right: ['KeyD'],
+    nitro: ['ShiftLeft', 'Space'],
+    steerSign: DEFAULT_STEER_SIGN
+  },
+  1: {
+    up: ['ArrowUp'],
+    down: ['ArrowDown'],
+    left: ['ArrowLeft'],
+    right: ['ArrowRight'],
+    nitro: ['ShiftRight', 'Enter'],
+    steerSign: DEFAULT_STEER_SIGN
+  }
+};
+
+function loadControlSettings() {
+  try {
+    const raw = localStorage.getItem(CONTROL_SETTINGS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    [0, 1].forEach(idx => {
+      const sign = parsed?.[idx]?.steerSign;
+      if (sign === 1 || sign === -1) CONTROL_MAP[idx].steerSign = sign;
+    });
+  } catch (_) {}
+}
+
+function saveControlSettings() {
+  const out = {
+    0: { steerSign: CONTROL_MAP[0].steerSign },
+    1: { steerSign: CONTROL_MAP[1].steerSign }
+  };
+  localStorage.setItem(CONTROL_SETTINGS_KEY, JSON.stringify(out));
+}
+
+function flashCenterMessage(text, color = '#7ad4ff') {
+  cdEl.textContent = text;
+  cdEl.style.display = 'block';
+  cdEl.style.color = color;
+  setTimeout(() => {
+    if (gamePhase !== 'countdown') cdEl.style.display = 'none';
+  }, 850);
+}
+
+function toggleSteerDirection(pidx) {
+  if (pidx !== 0 && pidx !== 1) return;
+  CONTROL_MAP[pidx].steerSign *= -1;
+  saveControlSettings();
+  const dir = CONTROL_MAP[pidx].steerSign === 1 ? 'NORMAL' : 'INVERTED';
+  flashCenterMessage(`P${pidx + 1} STEER ${dir}`, pidx === 0 ? '#ff8877' : '#77aaff');
+}
+
+function anyKeyDown(keys, codes) {
+  return codes.some(code => !!keys[code]);
+}
+
+loadControlSettings();
+
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   ensureAudio();
-  // Prevent arrow key scrolling
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.key)) {
+
+  if (e.code === 'BracketLeft') toggleSteerDirection(0);
+  if (e.code === 'BracketRight') toggleSteerDirection(1);
+
+  // Prevent gameplay keys from scrolling/submitting
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Enter'].includes(e.code)) {
     e.preventDefault();
   }
 });
