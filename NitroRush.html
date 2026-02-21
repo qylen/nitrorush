@@ -1020,15 +1020,15 @@ class Car {
 
   // ── Player input ──────────────────────────────────────────
   getInput(keys, pidx) {
-    if (pidx === 0) return {
-      up:    !!keys['KeyW'],      down:  !!keys['KeyS'],
-      steer: (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0),
-      nitro: !!(keys['ShiftLeft'] || keys['Space'])
-    };
+    const map = CONTROL_MAP[pidx] || CONTROL_MAP[0];
+    const left = anyKeyDown(keys, map.left) ? 1 : 0;
+    const right = anyKeyDown(keys, map.right) ? 1 : 0;
+
     return {
-      up:    !!keys['ArrowUp'],   down:  !!keys['ArrowDown'],
-      steer: (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0),
-      nitro: !!(keys['ShiftRight'] || keys['Enter'])
+      up: anyKeyDown(keys, map.up),
+      down: anyKeyDown(keys, map.down),
+      steer: (right - left) * STEER_INVERT,
+      nitro: anyKeyDown(keys, map.nitro)
     };
   }
 
@@ -1411,14 +1411,38 @@ function updateCamera(cam, car, dt) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// INPUT (unchanged)
+// INPUT
 // ─────────────────────────────────────────────────────────────
+
+const STEER_INVERT = -1;
+
+const CONTROL_MAP = {
+  0: {
+    up: ['KeyW'],
+    down: ['KeyS'],
+    left: ['KeyA'],
+    right: ['KeyD'],
+    nitro: ['ShiftLeft', 'Space']
+  },
+  1: {
+    up: ['ArrowUp'],
+    down: ['ArrowDown'],
+    left: ['ArrowLeft'],
+    right: ['ArrowRight'],
+    nitro: ['ShiftRight', 'Enter']
+  }
+};
+
+function anyKeyDown(keys, codes) {
+  return codes.some(code => !!keys[code]);
+}
+
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   ensureAudio();
   // Prevent arrow key scrolling
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.key)) {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
     e.preventDefault();
   }
 });
