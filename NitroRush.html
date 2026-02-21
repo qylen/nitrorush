@@ -175,6 +175,20 @@
     transition: all 0.2s;
   }
   #restart-btn:hover { background: rgba(255,255,255,0.1); }
+
+  .setup-row { display:flex; gap:10px; align-items:center; margin-bottom:16px; }
+  .setup-row label { font-size:11px; letter-spacing:3px; color:#bbb; }
+  #map-select {
+    background:#111; color:#fff; border:1px solid #444; border-radius:6px;
+    padding:8px 10px; min-width:220px; font-family:'Orbitron', sans-serif; font-size:11px;
+  }
+  #coins-display { font-size:13px; letter-spacing:2px; color:#ffdd55; margin-bottom:12px; }
+  #shop-grid { display:grid; grid-template-columns:repeat(5,minmax(120px,1fr)); gap:8px; max-width:900px; margin-bottom:24px; }
+  .shop-item { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:8px; font-size:10px; }
+  .shop-item .name { color:#fff; font-size:10px; letter-spacing:1px; }
+  .shop-item .meta { color:#aaa; margin:4px 0; font-family:monospace; }
+  .shop-item button { width:100%; margin-top:4px; font-size:10px; padding:6px; border:none; border-radius:5px; cursor:pointer; }
+
 </style>
 </head>
 <body>
@@ -237,20 +251,28 @@
 <div id="overlay">
   <h1>NITRORUSH</h1>
   <div class="sub">3-LAP CHAMPIONSHIP · 2 PLAYERS · 2 AI</div>
+  <div class="setup-row">
+    <label for="map-select">MAP</label>
+    <select id="map-select"></select>
+  </div>
+  <div id="coins-display">COINS: 0</div>
+  <div id="shop-grid"></div>
   <div class="controls-grid">
     <div class="ctrl-card" id="ctrl-p1">
       <h3>PLAYER 1</h3>
       <p><span>W</span> Accelerate</p>
       <p><span>S</span> Brake / Reverse</p>
       <p><span>A</span> / <span>D</span> Steer</p>
-      <p><span>SHIFT</span> Nitro Boost</p>
+      <p><span>SHIFT</span> / <span>SPACE</span> Nitro Boost</p>
+      <p><span>[</span> Toggle Steering Dir</p>
     </div>
     <div class="ctrl-card" id="ctrl-p2">
       <h3>PLAYER 2</h3>
       <p><span>↑</span> Accelerate</p>
       <p><span>↓</span> Brake / Reverse</p>
       <p><span>←</span> / <span>→</span> Steer</p>
-      <p><span>ENTER</span> Nitro Boost</p>
+      <p><span>ENTER</span> / <span>R-SHIFT</span> Nitro Boost</p>
+      <p><span>]</span> Toggle Steering Dir</p>
     </div>
   </div>
   <button id="start-btn" onclick="startGame()">START RACE</button>
@@ -477,33 +499,20 @@ const ROAD_W = 18;
 const TOTAL_LAPS = 3;
 const NUM_CP = 16;
 
-// Circuit waypoints [x, z] — a flowing asymmetric circuit
-const CIRCUIT_PTS = [
-  [0, 0],
-  [50, -18],
-  [100, -50],
-  [140, -90],
-  [165, -120],
-  [175, -90],
-  [165, -50],
-  [145, -5],
-  [165, 40],
-  [175, 85],
-  [155, 115],
-  [115, 130],
-  [65, 138],
-  [10, 132],
-  [-45, 120],
-  [-100, 95],
-  [-145, 55],
-  [-165, 15],
-  [-165, -35],
-  [-145, -75],
-  [-110, -95],
-  [-65, -85],
-  [-30, -55],
-  [-15, -25],
+const GAME_PROGRESS_KEY = 'nitrorush.progress.v1';
+const MAP_KEY = 'nitrorush.map.v1';
+
+const MAP_DEFS = [
+  { id: 'coastal', name: 'Coastal Loop', pts: [[0,0],[50,-18],[100,-50],[140,-90],[165,-120],[175,-90],[165,-50],[145,-5],[165,40],[175,85],[155,115],[115,130],[65,138],[10,132],[-45,120],[-100,95],[-145,55],[-165,15],[-165,-35],[-145,-75],[-110,-95],[-65,-85],[-30,-55],[-15,-25]] },
+  { id: 'desert', name: 'Desert S', pts: [[0,0],[45,-35],[95,-75],[150,-85],[180,-50],[165,-5],[115,25],[75,55],[95,95],[145,120],[120,150],[65,165],[10,145],[-45,125],[-95,115],[-145,85],[-175,35],[-165,-15],[-125,-45],[-85,-65],[-45,-80],[-5,-60],[15,-25]] },
+  { id: 'forest', name: 'Forest Ring', pts: [[0,0],[35,-25],[75,-50],[115,-75],[145,-105],[160,-70],[150,-20],[130,25],[150,70],[165,110],[130,140],[80,155],[30,145],[-25,130],[-80,120],[-130,100],[-160,65],[-180,20],[-170,-25],[-140,-60],[-100,-80],[-55,-78],[-20,-50],[-5,-20]] },
+  { id: 'volcano', name: 'Volcano Pass', pts: [[0,0],[55,-12],[110,-20],[155,-55],[180,-105],[140,-130],[95,-105],[65,-70],[105,-25],[155,30],[180,85],[140,125],[85,145],[25,155],[-40,140],[-100,125],[-150,85],[-180,35],[-175,-20],[-145,-70],[-95,-95],[-40,-85],[-10,-55],[-2,-20]] },
+  { id: 'night', name: 'Night Sprint', pts: [[0,0],[65,-8],[125,-35],[170,-80],[170,-30],[150,20],[120,60],[150,105],[170,145],[120,170],[60,160],[0,140],[-65,120],[-130,95],[-175,55],[-185,5],[-170,-45],[-130,-80],[-80,-105],[-30,-95],[0,-70],[20,-45]] }
 ];
+
+let selectedMapId = localStorage.getItem(MAP_KEY) || MAP_DEFS[0].id;
+if (!MAP_DEFS.some(m => m.id === selectedMapId)) selectedMapId = MAP_DEFS[0].id;
+const CIRCUIT_PTS = MAP_DEFS.find(m => m.id === selectedMapId).pts;
 
 const trackPts3D = CIRCUIT_PTS.map(p => new THREE.Vector3(p[0], 0, p[1]));
 const trackCurve = new THREE.CatmullRomCurve3(trackPts3D, true, 'catmullrom', 0.5);
@@ -954,9 +963,21 @@ for (let pass = 0; pass < 4; pass++) {
 // ─────────────────────────────────────────────────────────────
 let finishedCount = 0;
 const carFinishTimes = [];
+let raceEnded = false;
+
+const GARAGE_CARS = Array.from({ length: 10 }, (_, i) => ({
+  id: i,
+  name: `CAR-${(i + 1).toString().padStart(2, '0')}`,
+  price: i === 0 ? 0 : i * 250,
+  maxFwdSpeed: 30 + i * 2.7,
+  accel: 23 + i * 1.6,
+  turnRate: 2.3 + i * 0.06
+}));
+
+let gameProgress = { coins: 0, unlocked: [0], selected: 0 };
 
 class Car {
-  constructor({ color, startT, isAI, playerIdx, aiSpeedFactor = 1, name = 'RACER' }) {
+  constructor({ color, startT, isAI, playerIdx, aiSpeedFactor = 1, name = 'RACER', playerCar = null }) {
     this.isAI = isAI;
     this.playerIdx = playerIdx;
     this.name = name;
@@ -970,13 +991,13 @@ class Car {
     this.speed = 0;           // signed forward speed (m/s)
 
     // Physics — players get punchier feel
-    this.maxFwdSpeed = isAI ? AI_BASE_SPEED * aiSpeedFactor : 34;
+    this.maxFwdSpeed = isAI ? AI_BASE_SPEED * aiSpeedFactor : (playerCar?.maxFwdSpeed || 34);
     this.maxRevSpeed = 10;
-    this.accel      = isAI ? 20  : 26;
+    this.accel      = isAI ? 20  : (playerCar?.accel || 26);
     this.brakeForce = 44;
     this.drag       = 0.978;
     this.grip       = 0.90;   // lateral grip (higher = less drift)
-    this.turnRate   = isAI ? 2.3 : 2.5;   // rad/s at full steer
+    this.turnRate   = isAI ? 2.3 : (playerCar?.turnRate || 2.5);   // rad/s at full steer
 
     // Nitro
     this.nitro = 100;
@@ -993,6 +1014,7 @@ class Car {
     this.prevPosSample = this.pos.clone();
     this.prevPosSampleTimer = 0;
     this.lastLapTime = 0;
+    this.finishTime = null;
     this.recoverPhase = 0;  // 0=normal, 1=reverse, 2=done
     this.recoverTimer = 0;
 
@@ -1020,15 +1042,15 @@ class Car {
 
   // ── Player input ──────────────────────────────────────────
   getInput(keys, pidx) {
-    if (pidx === 0) return {
-      up:    !!keys['KeyW'],      down:  !!keys['KeyS'],
-      steer: (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0),
-      nitro: !!(keys['ShiftLeft'] || keys['Space'])
-    };
+    const map = CONTROL_MAP[pidx] || CONTROL_MAP[0];
+    const left = anyKeyDown(keys, map.left) ? 1 : 0;
+    const right = anyKeyDown(keys, map.right) ? 1 : 0;
+
     return {
-      up:    !!keys['ArrowUp'],   down:  !!keys['ArrowDown'],
-      steer: (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0),
-      nitro: !!(keys['ShiftRight'] || keys['Enter'])
+      up: anyKeyDown(keys, map.up),
+      down: anyKeyDown(keys, map.down),
+      steer: (right - left) * map.steerSign,
+      nitro: anyKeyDown(keys, map.nitro)
     };
   }
 
@@ -1250,6 +1272,7 @@ class Car {
         if (this.lap >= TOTAL_LAPS && !this.finished) {
           this.finished = true;
           this.finishPos = ++finishedCount;
+          this.finishTime = (performance.now() / 1000) - raceStartTime;
           carFinishTimes.push({ car: this, pos: this.finishPos });
         }
       }
@@ -1411,14 +1434,84 @@ function updateCamera(cam, car, dt) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// INPUT (unchanged)
+// INPUT
 // ─────────────────────────────────────────────────────────────
+
+const CONTROL_SETTINGS_KEY = 'nitrorush.controls.v1';
+const DEFAULT_STEER_SIGN = -1;
+
+const CONTROL_MAP = {
+  0: {
+    up: ['KeyW'],
+    down: ['KeyS'],
+    left: ['KeyA'],
+    right: ['KeyD'],
+    nitro: ['ShiftLeft', 'Space'],
+    steerSign: DEFAULT_STEER_SIGN
+  },
+  1: {
+    up: ['ArrowUp'],
+    down: ['ArrowDown'],
+    left: ['ArrowLeft'],
+    right: ['ArrowRight'],
+    nitro: ['ShiftRight', 'Enter'],
+    steerSign: DEFAULT_STEER_SIGN
+  }
+};
+
+function loadControlSettings() {
+  try {
+    const raw = localStorage.getItem(CONTROL_SETTINGS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    [0, 1].forEach(idx => {
+      const sign = parsed?.[idx]?.steerSign;
+      if (sign === 1 || sign === -1) CONTROL_MAP[idx].steerSign = sign;
+    });
+  } catch (_) {}
+}
+
+function saveControlSettings() {
+  const out = {
+    0: { steerSign: CONTROL_MAP[0].steerSign },
+    1: { steerSign: CONTROL_MAP[1].steerSign }
+  };
+  localStorage.setItem(CONTROL_SETTINGS_KEY, JSON.stringify(out));
+}
+
+function flashCenterMessage(text, color = '#7ad4ff') {
+  cdEl.textContent = text;
+  cdEl.style.display = 'block';
+  cdEl.style.color = color;
+  setTimeout(() => {
+    if (gamePhase !== 'countdown') cdEl.style.display = 'none';
+  }, 850);
+}
+
+function toggleSteerDirection(pidx) {
+  if (pidx !== 0 && pidx !== 1) return;
+  CONTROL_MAP[pidx].steerSign *= -1;
+  saveControlSettings();
+  const dir = CONTROL_MAP[pidx].steerSign === 1 ? 'NORMAL' : 'INVERTED';
+  flashCenterMessage(`P${pidx + 1} STEER ${dir}`, pidx === 0 ? '#ff8877' : '#77aaff');
+}
+
+function anyKeyDown(keys, codes) {
+  return codes.some(code => !!keys[code]);
+}
+
+loadControlSettings();
+
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   ensureAudio();
-  // Prevent arrow key scrolling
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.key)) {
+
+  if (e.code === 'BracketLeft') toggleSteerDirection(0);
+  if (e.code === 'BracketRight') toggleSteerDirection(1);
+
+  // Prevent gameplay keys from scrolling/submitting
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Enter'].includes(e.code)) {
     e.preventDefault();
   }
 });
@@ -1438,6 +1531,82 @@ const ORDINALS = ['', '1st', '2nd', '3rd', '4th'];
 // Cars: initialized on game start
 let cars = [];
 
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(GAME_PROGRESS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.coins === 'number') gameProgress.coins = Math.max(0, Math.floor(parsed.coins));
+    if (Array.isArray(parsed.unlocked) && parsed.unlocked.length) {
+      gameProgress.unlocked = parsed.unlocked.filter(i => Number.isInteger(i) && i >= 0 && i < GARAGE_CARS.length);
+      if (!gameProgress.unlocked.includes(0)) gameProgress.unlocked.unshift(0);
+    }
+    if (Number.isInteger(parsed.selected) && gameProgress.unlocked.includes(parsed.selected)) gameProgress.selected = parsed.selected;
+  } catch (_) {}
+}
+
+function saveProgress() {
+  localStorage.setItem(GAME_PROGRESS_KEY, JSON.stringify(gameProgress));
+}
+
+function renderShop() {
+  const coinsEl = document.getElementById('coins-display');
+  const grid = document.getElementById('shop-grid');
+  if (!coinsEl || !grid) return;
+  coinsEl.textContent = `COINS: ${gameProgress.coins}`;
+  grid.innerHTML = '';
+  GARAGE_CARS.forEach(car => {
+    const unlocked = gameProgress.unlocked.includes(car.id);
+    const selected = gameProgress.selected === car.id;
+    const card = document.createElement('div');
+    card.className = 'shop-item';
+    card.innerHTML = `<div class="name">${car.name}</div><div class="meta">SPD ${car.maxFwdSpeed.toFixed(1)} | ACC ${car.accel.toFixed(1)}</div><div class="meta">PRICE: ${car.price}</div>`;
+    const btn = document.createElement('button');
+    if (selected) {
+      btn.textContent = 'SELECTED';
+      btn.disabled = true;
+    } else if (unlocked) {
+      btn.textContent = 'SELECT';
+      btn.onclick = () => { gameProgress.selected = car.id; saveProgress(); renderShop(); };
+    } else {
+      btn.textContent = `BUY ${car.price}`;
+      btn.disabled = gameProgress.coins < car.price;
+      btn.onclick = () => {
+        if (gameProgress.coins < car.price) return;
+        gameProgress.coins -= car.price;
+        gameProgress.unlocked.push(car.id);
+        gameProgress.selected = car.id;
+        saveProgress();
+        renderShop();
+      };
+    }
+    card.appendChild(btn);
+    grid.appendChild(card);
+  });
+}
+
+function initMapSelect() {
+  const sel = document.getElementById('map-select');
+  if (!sel) return;
+  sel.innerHTML = '';
+  MAP_DEFS.forEach(map => {
+    const opt = document.createElement('option');
+    opt.value = map.id;
+    opt.textContent = map.name;
+    if (map.id === selectedMapId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => {
+    localStorage.setItem(MAP_KEY, sel.value);
+    location.reload();
+  });
+}
+
+loadProgress();
+initMapSelect();
+renderShop();
+
+
 function initCars() {
   // Clear existing
   cars.forEach(c => scene.remove(c.mesh));
@@ -1446,9 +1615,10 @@ function initCars() {
   // Stagger starting positions more realistically – use t increments of 0.005
   const starts = [0.0, 0.005, 0.01, 0.015];
   const colors = [0xff3322, 0x2255ff, 0x22cc44, 0xffcc00];
+  const playerCar = GARAGE_CARS[gameProgress.selected] || GARAGE_CARS[0];
   const carDefs = [
-    { color: colors[0], startT: starts[0], isAI: false, playerIdx: 0, name: 'PLAYER 1' },
-    { color: colors[1], startT: starts[1], isAI: false, playerIdx: 1, name: 'PLAYER 2' },
+    { color: colors[0], startT: starts[0], isAI: false, playerIdx: 0, name: `PLAYER 1 (${playerCar.name})`, playerCar },
+    { color: colors[1], startT: starts[1], isAI: false, playerIdx: 1, name: `PLAYER 2 (${playerCar.name})`, playerCar },
     { color: colors[2], startT: starts[2], isAI: true,  playerIdx: -1, aiSpeedFactor: 0.94, name: 'AI — GREEN' },
     { color: colors[3], startT: starts[3], isAI: true,  playerIdx: -1, aiSpeedFactor: 0.97, name: 'AI — YELLOW' },
   ];
@@ -1461,6 +1631,20 @@ function initCars() {
 }
 
 let raceStartTime = 0;
+
+function finishRace(winner) {
+  if (raceEnded) return;
+  raceEnded = true;
+  cars.forEach(c => {
+    if (c !== winner && !c.finished) { c.finished = true; c.finishTime = null; }
+  });
+  const winnerIsHuman = winner && !winner.isAI;
+  gameProgress.coins += winnerIsHuman ? 150 : 60;
+  saveProgress();
+  renderShop();
+  gamePhase = 'finished';
+  showFinish(winner);
+}
 
 function getRaceOrder() {
   return [...cars].sort((a, b) => b.totalProgress - a.totalProgress);
@@ -1506,14 +1690,15 @@ function hideCountdown() {
 // ─────────────────────────────────────────────────────────────
 // RACE FINISH (unchanged)
 // ─────────────────────────────────────────────────────────────
-function showFinish() {
-  const order = getRaceOrder();
+function showFinish(winner) {
   const list = document.getElementById('results-list');
   list.innerHTML = '';
-  order.forEach((car, i) => {
+  const rows = [winner, ...cars.filter(c => c !== winner)];
+  rows.forEach((car, i) => {
     const row = document.createElement('div');
     row.className = 'result-row' + (i === 0 ? ' first' : '');
-    row.textContent = `${ORDINALS[i + 1] || (i + 1) + 'th'}  —  ${car.name}`;
+    const timing = i === 0 ? `${winner.finishTime.toFixed(2)}s` : 'DNF';
+    row.textContent = `${ORDINALS[i + 1] || (i + 1) + 'th'}  —  ${car.name}  —  ${timing}`;
     list.appendChild(row);
   });
   document.getElementById('finish-screen').classList.add('show');
@@ -1616,21 +1801,12 @@ function loop(ts) {
     // HUD
     updateHUD();
 
-    // Check finish
-    if (cars[0].finished && cars[1].finished) {
-      gamePhase = 'finished';
-      showFinish();
-    }
+    // Check finish: first finisher ends race for everyone
+    const winner = cars.find(c => c.finished);
+    if (winner) finishRace(winner);
   }
 
   if (gamePhase === 'finished') {
-    // Still update AI and cameras smoothly
-    cars.forEach(car => {
-      if (!car.isAI) return;
-      car.update(dt, keys);
-    });
-    enforceBoundary(cars[0]);
-    enforceBoundary(cars[1]);
     updateCamera(cam1, cars[0], dt);
     updateCamera(cam2, cars[1], dt);
   }
@@ -1658,6 +1834,7 @@ function startGame() {
   document.getElementById('overlay').style.display = 'none';
   initCars();
   finishedCount = 0;
+  raceEnded = false;
   countdownVal = 3;
   countdownAccum = 0;
   gamePhase = 'countdown';
